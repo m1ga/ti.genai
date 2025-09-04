@@ -1,5 +1,7 @@
 # ti.genai - ML Kit GenAI for Titanium SDK (Android)
 
+Titanium SDK module for Googles ML Kit GenAI https://developers.google.com/ml-kit/genai
+
 ## Requirements
 
 * `<uses-sdk android:minSdkVersion="26"/>` in your tiapp.xml
