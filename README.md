@@ -12,7 +12,7 @@ For an iOS AI module have a look at https://github.com/deckameron/Ti.Apple.Intel
 
 Run Gemini Nano locally for proofreading, rewriting, summarization, and image descriptions - all offline, private, and fast.
 
-[Features](https://github.com/m1ga/ti.genai?tab=readme-ov-file#-features) • [Installation](https://github.com/m1ga/ti.genai?tab=readme-ov-file#-installation) • [Quick Start](https://github.com/m1ga/ti.genai?tab=readme-ov-file#-quick-start) • [Documentation](https://github.com/m1ga/ti.genai?tab=readme-ov-file#-documentation) • [Examples](https://github.com/m1ga/ti.genai?tab=readme-ov-file#-examples)
+[Features](#-features) • [Installation](#-installation) • [Quick Start](#-quick-start) • [Documentation](#-documentation) • [Examples](#-examples)
 
 ---
 
