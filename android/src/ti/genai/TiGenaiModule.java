@@ -8,17 +8,20 @@
 package ti.genai;
 
 import android.annotation.SuppressLint;
+import android.graphics.Bitmap;
 import android.os.Build;
-
 import androidx.annotation.NonNull;
 import androidx.annotation.RequiresApi;
 import androidx.camera.core.impl.utils.futures.FutureCallback;
 import androidx.camera.core.impl.utils.futures.Futures;
-
 import com.google.common.util.concurrent.ListenableFuture;
 import com.google.mlkit.genai.common.DownloadCallback;
 import com.google.mlkit.genai.common.FeatureStatus;
 import com.google.mlkit.genai.common.GenAiException;
+import com.google.mlkit.genai.imagedescription.ImageDescriber;
+import com.google.mlkit.genai.imagedescription.ImageDescriberOptions;
+import com.google.mlkit.genai.imagedescription.ImageDescription;
+import com.google.mlkit.genai.imagedescription.ImageDescriptionRequest;
 import com.google.mlkit.genai.proofreading.Proofreader;
 import com.google.mlkit.genai.proofreading.ProofreaderOptions;
 import com.google.mlkit.genai.proofreading.Proofreading;
@@ -31,47 +34,69 @@ import com.google.mlkit.genai.summarization.Summarization;
 import com.google.mlkit.genai.summarization.SummarizationRequest;
 import com.google.mlkit.genai.summarization.Summarizer;
 import com.google.mlkit.genai.summarization.SummarizerOptions;
-
 import org.appcelerator.kroll.KrollDict;
 import org.appcelerator.kroll.KrollModule;
 import org.appcelerator.kroll.annotations.Kroll;
 import org.appcelerator.kroll.common.Log;
 import org.appcelerator.titanium.TiApplication;
-
+import org.appcelerator.titanium.TiBlob;
+import java.util.concurrent.ExecutionException;
+import java.util.List;
 
 @Kroll.module(name = "TiGenai", id = "ti.genai")
 public class TiGenaiModule extends KrollModule {
 
-    @Kroll.constant
-    static final int ELABORATE = RewriterOptions.OutputType.ELABORATE;
-    @Kroll.constant
-    static final int PROFESSIONAL = RewriterOptions.OutputType.PROFESSIONAL;
-    @Kroll.constant
-    static final int SHORTEN = RewriterOptions.OutputType.SHORTEN;
-    @Kroll.constant
-    static final int FRIENDLY = RewriterOptions.OutputType.FRIENDLY;
-    @Kroll.constant
-    static final int EMOJIFY = RewriterOptions.OutputType.EMOJIFY;
-    @Kroll.constant
-    static final int REPHRASE = RewriterOptions.OutputType.REPHRASE;
-
-    @Kroll.constant
-    static final int ONE_BULLET = SummarizerOptions.OutputType.ONE_BULLET;
-    @Kroll.constant
-    static final int TWO_BULLETS = SummarizerOptions.OutputType.TWO_BULLETS;
-    @Kroll.constant
-    static final int THREE_BULLETS = SummarizerOptions.OutputType.THREE_BULLETS;
-
-    @Kroll.constant
-    static final int ARTICLE = SummarizerOptions.InputType.ARTICLE;
-    @Kroll.constant
-    static final int CONVERSATION = SummarizerOptions.InputType.CONVERSATION;
-
-
     private static final String LCAT = "TiGenaiModule";
-    Proofreader proofreader;
-    Rewriter rewriter;
-    Summarizer summarizer;
+
+    // Rewriter Output Types
+    @Kroll.constant public static final int ELABORATE = RewriterOptions.OutputType.ELABORATE;
+    @Kroll.constant public static final int PROFESSIONAL = RewriterOptions.OutputType.PROFESSIONAL;
+    @Kroll.constant public static final int SHORTEN = RewriterOptions.OutputType.SHORTEN;
+    @Kroll.constant public static final int FRIENDLY = RewriterOptions.OutputType.FRIENDLY;
+    @Kroll.constant public static final int EMOJIFY = RewriterOptions.OutputType.EMOJIFY;
+    @Kroll.constant public static final int REPHRASE = RewriterOptions.OutputType.REPHRASE;
+
+    // Summarizer Output Types
+    @Kroll.constant public static final int ONE_BULLET = SummarizerOptions.OutputType.ONE_BULLET;
+    @Kroll.constant public static final int TWO_BULLETS = SummarizerOptions.OutputType.TWO_BULLETS;
+    @Kroll.constant public static final int THREE_BULLETS = SummarizerOptions.OutputType.THREE_BULLETS;
+
+    // Summarizer Input Types
+    @Kroll.constant public static final int ARTICLE = SummarizerOptions.InputType.ARTICLE;
+    @Kroll.constant public static final int CONVERSATION = SummarizerOptions.InputType.CONVERSATION;
+
+    // Proofreader Input Types
+    @Kroll.constant public static final int KEYBOARD = ProofreaderOptions.InputType.KEYBOARD;
+    @Kroll.constant public static final int VOICE = ProofreaderOptions.InputType.VOICE;
+
+    // Feature Status
+    @Kroll.constant public static final int STATUS_UNAVAILABLE = FeatureStatus.UNAVAILABLE;
+    @Kroll.constant public static final int STATUS_DOWNLOADABLE = FeatureStatus.DOWNLOADABLE;
+    @Kroll.constant public static final int STATUS_DOWNLOADING = FeatureStatus.DOWNLOADING;
+    @Kroll.constant public static final int STATUS_AVAILABLE = FeatureStatus.AVAILABLE;
+
+    // Language Constants
+    @Kroll.constant public static final int LANG_ENGLISH = 0;
+    @Kroll.constant public static final int LANG_PORTUGUESE = 1;
+    @Kroll.constant public static final int LANG_SPANISH = 2;
+    @Kroll.constant public static final int LANG_FRENCH = 3;
+    @Kroll.constant public static final int LANG_GERMAN = 4;
+    @Kroll.constant public static final int LANG_ITALIAN = 5;
+    @Kroll.constant public static final int LANG_JAPANESE = 6;
+    @Kroll.constant public static final int LANG_KOREAN = 7;
+    @Kroll.constant public static final int LANG_CHINESE = 8;
+
+    // Event Names
+    private static final String EVENT_STATUS_CHANGE = "statusChange";
+    private static final String EVENT_DOWNLOAD_PROGRESS = "downloadProgress";
+    private static final String EVENT_SUCCESS = "success";
+    private static final String EVENT_ERROR = "error";
+    private static final String EVENT_STREAM_CHUNK = "streamChunk";
+
+    private Proofreader proofreader;
+    private Rewriter rewriter;
+    private Summarizer summarizer;
+    private ImageDescriber imageDescriber;
 
     public TiGenaiModule() {
         super();
@@ -79,246 +104,652 @@ public class TiGenaiModule extends KrollModule {
 
     @Kroll.onAppCreate
     public static void onAppCreate(TiApplication app) {
+        Log.d(LCAT, "TiGenai module initialized");
     }
 
-    // Methods
+    // ==================== PROOFREADING ====================
+
     @RequiresApi(api = Build.VERSION_CODES.P)
     @Kroll.method
-    public void proofread(KrollDict kd) {
-        String textToProofread = kd.getString("text");
+    public void proofread(KrollDict options) {
+        Log.d(LCAT, "Starting proofread operation");
 
-        ProofreaderOptions proofreaderOptions =
-                ProofreaderOptions
-                        .builder(TiApplication.getAppRootOrCurrentActivity())
-                        .setInputType(ProofreaderOptions.InputType.KEYBOARD)
-                        .setLanguage(ProofreaderOptions.Language.ENGLISH)
-                        .build();
+        if (!options.containsKeyAndNotNull("text")) {
+            fireErrorEvent("proofread", "Missing required parameter: text");
+            return;
+        }
+
+        String text = options.getString("text");
+        int inputType = options.optInt("inputType", KEYBOARD);
+        int language = options.optInt("language", LANG_ENGLISH);
+        boolean streaming = options.optBoolean("streaming", true);
+
+        Log.d(LCAT, "Proofread config - Text length: " + text.length() +
+                ", InputType: " + inputType +
+                ", Language: " + getLanguageName(language) +
+                ", Streaming: " + streaming);
+
+        ProofreaderOptions proofreaderOptions = ProofreaderOptions.builder(TiApplication.getAppRootOrCurrentActivity())
+                .setInputType(inputType)
+                .setLanguage(mapLanguageToProofreader(language))
+                .build();
+
         proofreader = Proofreading.getClient(proofreaderOptions);
-        prepareAndStartProofread(textToProofread);
+        prepareAndExecute(proofreader, text, streaming, "proofreading");
     }
+
+    // ==================== REWRITING ====================
 
     @RequiresApi(api = Build.VERSION_CODES.P)
     @Kroll.method
-    public void summarize(KrollDict kd) {
-        String textToProofread = kd.getString("text");
-        int outputType = SummarizerOptions.OutputType.ONE_BULLET;
-        int inputType = SummarizerOptions.InputType.ARTICLE;
-        if (kd.containsKeyAndNotNull("outputType")) {
-            outputType = kd.getInt("outputType");
+    public void rewrite(KrollDict options) {
+        Log.d(LCAT, "Starting rewrite operation");
+
+        if (!options.containsKeyAndNotNull("text")) {
+            fireErrorEvent("rewrite", "Missing required parameter: text");
+            return;
         }
 
-        SummarizerOptions summarizerOptions =
-                SummarizerOptions.builder(TiApplication.getAppRootOrCurrentActivity())
-                        .setOutputType(outputType)
-                        .setInputType(inputType)
-                        .setLanguage(SummarizerOptions.Language.ENGLISH)
-                        .build();
-        summarizer = Summarization.getClient(summarizerOptions);
-        prepareAndStartSummarization(textToProofread);
-    }
+        String text = options.getString("text");
+        int outputType = options.optInt("outputType", ELABORATE);
+        int language = options.optInt("language", LANG_ENGLISH);
+        boolean streaming = options.optBoolean("streaming", true);
 
-    @RequiresApi(api = Build.VERSION_CODES.P)
-    @Kroll.method
-    public void rewrite(KrollDict kd) {
-        String textToProofread = kd.getString("text");
-        int outputType = RewriterOptions.OutputType.ELABORATE;
-        if (kd.containsKeyAndNotNull("outputType")) {
-            outputType = kd.getInt("outputType");
-        }
+        Log.d(LCAT, "Rewrite config - Text length: " + text.length() +
+                ", OutputType: " + getRewriteTypeName(outputType) +
+                ", Language: " + getLanguageName(language) +
+                ", Streaming: " + streaming);
 
-        RewriterOptions rewriterOptions =
-                RewriterOptions.builder(TiApplication.getAppRootOrCurrentActivity())
-                        .setOutputType(outputType)
-                        .setLanguage(RewriterOptions.Language.ENGLISH)
-                        .build();
+        RewriterOptions rewriterOptions = RewriterOptions.builder(TiApplication.getAppRootOrCurrentActivity())
+                .setOutputType(outputType)
+                .setLanguage(mapLanguageToRewriter(language))
+                .build();
+
         rewriter = Rewriting.getClient(rewriterOptions);
-        prepareAndStartRewrite(textToProofread);
+        prepareAndExecute(rewriter, text, streaming, "rewriting");
+    }
+
+    // ==================== SUMMARIZATION ====================
+
+    @RequiresApi(api = Build.VERSION_CODES.P)
+    @Kroll.method
+    public void summarize(KrollDict options) {
+        Log.d(LCAT, "Starting summarization operation");
+
+        if (!options.containsKeyAndNotNull("text")) {
+            fireErrorEvent("summarize", "Missing required parameter: text");
+            return;
+        }
+
+        String text = options.getString("text");
+        int outputType = options.optInt("outputType", ONE_BULLET);
+        int inputType = options.optInt("inputType", ARTICLE);
+        int language = options.optInt("language", LANG_ENGLISH);
+        boolean streaming = options.optBoolean("streaming", true);
+
+        Log.d(LCAT, "Summarize config - Text length: " + text.length() +
+                ", OutputType: " + getSummarizeTypeName(outputType) +
+                ", InputType: " + (inputType == ARTICLE ? "ARTICLE" : "CONVERSATION") +
+                ", Language: " + getLanguageName(language) +
+                ", Streaming: " + streaming);
+
+        SummarizerOptions summarizerOptions = SummarizerOptions.builder(TiApplication.getAppRootOrCurrentActivity())
+                .setOutputType(outputType)
+                .setInputType(inputType)
+                .setLanguage(mapLanguageToSummarizer(language))
+                .build();
+
+        summarizer = Summarization.getClient(summarizerOptions);
+        prepareAndExecute(summarizer, text, streaming, "summarization");
+    }
+
+    // ==================== IMAGE DESCRIPTION ====================
+
+    @RequiresApi(api = Build.VERSION_CODES.P)
+    @Kroll.method
+    public void describeImage(KrollDict options) {
+        Log.d(LCAT, "Starting image description operation");
+
+        if (!options.containsKeyAndNotNull("image")) {
+            fireErrorEvent("describeImage", "Missing required parameter: image (TiBlob)");
+            return;
+        }
+
+        Object imageObj = options.get("image");
+        Bitmap bitmap = null;
+
+        if (imageObj instanceof TiBlob) {
+            TiBlob blob = (TiBlob) imageObj;
+            bitmap = blob.getImage();
+            Log.d(LCAT, "Image description - Bitmap size: " + bitmap.getWidth() + "x" + bitmap.getHeight());
+        } else {
+            fireErrorEvent("describeImage", "Invalid image parameter. Must be a TiBlob");
+            return;
+        }
+
+        boolean streaming = options.optBoolean("streaming", true);
+        Log.d(LCAT, "Image description config - Streaming: " + streaming);
+
+        ImageDescriberOptions imageDescriberOptions = ImageDescriberOptions
+                .builder(TiApplication.getAppRootOrCurrentActivity())
+                .build();
+
+        imageDescriber = ImageDescription.getClient(imageDescriberOptions);
+        prepareAndExecuteImage(imageDescriber, bitmap, streaming);
+    }
+
+    // ==================== CLEANUP ====================
+
+    @Kroll.method
+    public void cleanup() {
+        Log.d(LCAT, "Cleaning up GenAI resources");
+
+        try {
+            if (proofreader != null) {
+                proofreader.close();
+                proofreader = null;
+                Log.d(LCAT, "Proofreader closed successfully");
+            }
+            if (rewriter != null) {
+                rewriter.close();
+                rewriter = null;
+                Log.d(LCAT, "Rewriter closed successfully");
+            }
+            if (summarizer != null) {
+                summarizer.close();
+                summarizer = null;
+                Log.d(LCAT, "Summarizer closed successfully");
+            }
+            if (imageDescriber != null) {
+                imageDescriber.close();
+                imageDescriber = null;
+                Log.d(LCAT, "ImageDescriber closed successfully");
+            }
+
+            Log.i(LCAT, "All GenAI resources cleaned up successfully");
+        } catch (Exception e) {
+            Log.e(LCAT, "Error during cleanup: " + e.getMessage(), e);
+            fireErrorEvent("cleanup", "Failed to cleanup resources: " + e.getMessage());
+        }
+    }
+
+    // ==================== HELPER METHODS ====================
+
+    @SuppressLint("RestrictedApi")
+    @RequiresApi(api = Build.VERSION_CODES.P)
+    private void prepareAndExecute(Object client, String text, boolean streaming, String operationType) {
+        ListenableFuture<Integer> future = null;
+
+        if (client instanceof Proofreader) {
+            future = ((Proofreader) client).checkFeatureStatus();
+        } else if (client instanceof Rewriter) {
+            future = ((Rewriter) client).checkFeatureStatus();
+        } else if (client instanceof Summarizer) {
+            future = ((Summarizer) client).checkFeatureStatus();
+        }
+
+        if (future == null) {
+            fireErrorEvent(operationType, "Invalid client type");
+            return;
+        }
+
+        Futures.addCallback(future, new FutureCallback<Integer>() {
+            @Override
+            public void onSuccess(Integer featureStatus) {
+                handleFeatureStatus(client, featureStatus, text, streaming, operationType);
+            }
+
+            @Override
+            public void onFailure(@NonNull Throwable thrown) {
+                Log.e(LCAT, operationType + " - Feature status check failed: " + thrown.getMessage(), thrown);
+                fireErrorEvent(operationType, "Feature status check failed: " + thrown.getMessage());
+            }
+        }, TiApplication.getAppRootOrCurrentActivity().getMainExecutor());
     }
 
     @SuppressLint("RestrictedApi")
     @RequiresApi(api = Build.VERSION_CODES.P)
-    public void prepareAndStartProofread(String textToProofread) {
-        ListenableFuture<Integer> future = proofreader.checkFeatureStatus();
+    private void prepareAndExecuteImage(ImageDescriber client, Bitmap bitmap, boolean streaming) {
+        ListenableFuture<Integer> future = client.checkFeatureStatus();
 
-        Futures.addCallback(
-                future,
-                new FutureCallback<Integer>() {
-                    public void onSuccess(Integer featureStatus) {
-                        KrollDict kd = new KrollDict();
-                        if (featureStatus == FeatureStatus.DOWNLOADABLE) {
-                            proofreader.downloadFeature(new DownloadCallback() {
-                                @Override
-                                public void onDownloadStarted(long bytesToDownload) {
-                                    kd.put("status", "download started");
-                                    fireEvent("status", kd);
-                                }
+        Futures.addCallback(future, new FutureCallback<Integer>() {
+            @Override
+            public void onSuccess(Integer featureStatus) {
+                handleImageFeatureStatus(client, featureStatus, bitmap, streaming);
+            }
 
-                                @Override
-                                public void onDownloadFailed(GenAiException e) {
-                                    kd.put("status", "download failed");
-                                    fireEvent("status", kd);
-                                }
-
-                                @Override
-                                public void onDownloadProgress(long totalBytesDownloaded) {
-                                }
-
-                                @Override
-                                public void onDownloadCompleted() {
-                                    kd.put("status", "download complete");
-                                    fireEvent("status", kd);
-                                    startProofreadingRequest(textToProofread, proofreader);
-                                }
-                            });
-                        } else if (featureStatus == FeatureStatus.DOWNLOADING) {
-                            startProofreadingRequest(textToProofread, proofreader);
-                        } else if (featureStatus == FeatureStatus.AVAILABLE) {
-                            startProofreadingRequest(textToProofread, proofreader);
-                        }
-                    }
-
-                    public void onFailure(@NonNull Throwable thrown) {
-                        Log.e(LCAT, thrown.getMessage());
-                    }
-                },
-                TiApplication.getAppRootOrCurrentActivity().getMainExecutor()
-        );
-
+            @Override
+            public void onFailure(@NonNull Throwable thrown) {
+                Log.e(LCAT, "Image description - Feature status check failed: " + thrown.getMessage(), thrown);
+                fireErrorEvent("imageDescription", "Feature status check failed: " + thrown.getMessage());
+            }
+        }, TiApplication.getAppRootOrCurrentActivity().getMainExecutor());
     }
 
-    @SuppressLint("RestrictedApi")
-    @RequiresApi(api = Build.VERSION_CODES.P)
-    public void prepareAndStartRewrite(String textToProofread) {
-        ListenableFuture<Integer> future = rewriter.checkFeatureStatus();
+    private void handleFeatureStatus(Object client, Integer featureStatus, String text, boolean streaming, String operationType) {
+        String statusName = getFeatureStatusName(featureStatus);
+        Log.d(LCAT, operationType + " - Feature status: " + statusName);
 
-        Futures.addCallback(
-                future,
-                new FutureCallback<Integer>() {
-                    public void onSuccess(Integer featureStatus) {
-                        KrollDict kd = new KrollDict();
-                        if (featureStatus == FeatureStatus.DOWNLOADABLE) {
-                            rewriter.downloadFeature(new DownloadCallback() {
-                                @Override
-                                public void onDownloadStarted(long bytesToDownload) {
-                                    kd.put("status", "download started");
-                                    fireEvent("status", kd);
-                                }
+        fireStatusChangeEvent(operationType, featureStatus, statusName);
 
-                                @Override
-                                public void onDownloadFailed(GenAiException e) {
-                                    kd.put("status", "download failed");
-                                    fireEvent("status", kd);
-                                }
+        switch (featureStatus) {
+            case FeatureStatus.UNAVAILABLE:
+                Log.w(LCAT, operationType + " - Feature is unavailable on this device");
+                fireErrorEvent(operationType, "Feature unavailable on this device. Check device compatibility.");
+                break;
 
-                                @Override
-                                public void onDownloadProgress(long totalBytesDownloaded) {
-                                }
+            case FeatureStatus.DOWNLOADABLE:
+                Log.i(LCAT, operationType + " - Model needs to be downloaded. Starting download...");
+                downloadAndExecute(client, text, streaming, operationType);
+                break;
 
-                                @Override
-                                public void onDownloadCompleted() {
-                                    kd.put("status", "download complete");
-                                    fireEvent("status", kd);
-                                    startRewritingRequest(textToProofread, rewriter);
-                                }
-                            });
-                        } else if (featureStatus == FeatureStatus.DOWNLOADING) {
-                            startRewritingRequest(textToProofread, rewriter);
-                        } else if (featureStatus == FeatureStatus.AVAILABLE) {
-                            startRewritingRequest(textToProofread, rewriter);
-                        }
-                    }
+            case FeatureStatus.DOWNLOADING:
+                Log.i(LCAT, operationType + " - Model is currently downloading. Waiting for completion...");
+                // Model is already downloading, we'll execute when ready
+                executeInference(client, text, streaming, operationType);
+                break;
 
-                    public void onFailure(@NonNull Throwable thrown) {
-                        Log.e(LCAT, thrown.getMessage());
-                    }
-                },
-                TiApplication.getAppRootOrCurrentActivity().getMainExecutor()
-        );
+            case FeatureStatus.AVAILABLE:
+                Log.i(LCAT, operationType + " - Model is ready. Starting inference...");
+                executeInference(client, text, streaming, operationType);
+                break;
 
+            default:
+                Log.w(LCAT, operationType + " - Unknown feature status: " + featureStatus);
+                fireErrorEvent(operationType, "Unknown feature status: " + featureStatus);
+                break;
+        }
     }
 
-    @SuppressLint("RestrictedApi")
-    @RequiresApi(api = Build.VERSION_CODES.P)
-    public void prepareAndStartSummarization(String textToProofread) {
-        ListenableFuture<Integer> future = summarizer.checkFeatureStatus();
+    private void handleImageFeatureStatus(ImageDescriber client, Integer featureStatus, Bitmap bitmap, boolean streaming) {
+        String statusName = getFeatureStatusName(featureStatus);
+        Log.d(LCAT, "Image description - Feature status: " + statusName);
 
-        Futures.addCallback(
-                future,
-                new FutureCallback<Integer>() {
-                    public void onSuccess(Integer featureStatus) {
-                        KrollDict kd = new KrollDict();
-                        if (featureStatus == FeatureStatus.DOWNLOADABLE) {
-                            summarizer.downloadFeature(new DownloadCallback() {
-                                @Override
-                                public void onDownloadStarted(long bytesToDownload) {
-                                    kd.put("status", "download started");
-                                    fireEvent("status", kd);
-                                }
+        fireStatusChangeEvent("imageDescription", featureStatus, statusName);
 
-                                @Override
-                                public void onDownloadFailed(GenAiException e) {
-                                    kd.put("status", "download failed");
-                                    fireEvent("status", kd);
-                                }
+        switch (featureStatus) {
+            case FeatureStatus.UNAVAILABLE:
+                Log.w(LCAT, "Image description - Feature is unavailable on this device");
+                fireErrorEvent("imageDescription", "Feature unavailable on this device. Check device compatibility.");
+                break;
 
-                                @Override
-                                public void onDownloadProgress(long totalBytesDownloaded) {
-                                }
+            case FeatureStatus.DOWNLOADABLE:
+                Log.i(LCAT, "Image description - Model needs to be downloaded. Starting download...");
+                downloadAndExecuteImage(client, bitmap, streaming);
+                break;
 
-                                @Override
-                                public void onDownloadCompleted() {
-                                    kd.put("status", "download complete");
-                                    fireEvent("status", kd);
-                                    startSummarizationRequest(textToProofread, summarizer);
-                                }
-                            });
-                        } else if (featureStatus == FeatureStatus.DOWNLOADING) {
-                            startSummarizationRequest(textToProofread, summarizer);
-                        } else if (featureStatus == FeatureStatus.AVAILABLE) {
-                            startSummarizationRequest(textToProofread, summarizer);
-                        }
-                    }
+            case FeatureStatus.DOWNLOADING:
+                Log.i(LCAT, "Image description - Model is currently downloading. Waiting for completion...");
+                executeImageInference(client, bitmap, streaming);
+                break;
 
-                    public void onFailure(@NonNull Throwable thrown) {
-                        Log.e(LCAT, thrown.getMessage());
-                    }
-                },
-                TiApplication.getAppRootOrCurrentActivity().getMainExecutor()
-        );
+            case FeatureStatus.AVAILABLE:
+                Log.i(LCAT, "Image description - Model is ready. Starting inference...");
+                executeImageInference(client, bitmap, streaming);
+                break;
 
+            default:
+                Log.w(LCAT, "Image description - Unknown feature status: " + featureStatus);
+                fireErrorEvent("imageDescription", "Unknown feature status: " + featureStatus);
+                break;
+        }
     }
 
-    void startProofreadingRequest(String text, Proofreader resultObj) {
-        ProofreadingRequest proofreadingRequest = ProofreadingRequest
-                .builder(text).build();
+    private void downloadAndExecute(Object client, String text, boolean streaming, String operationType) {
+        DownloadCallback callback = new DownloadCallback() {
+            @Override
+            public void onDownloadStarted(long bytesToDownload) {
+                Log.i(LCAT, operationType + " - Download started. Size: " + formatBytes(bytesToDownload));
+                fireDownloadProgressEvent(operationType, 0, bytesToDownload, "started");
+            }
 
-        resultObj.runInference(proofreadingRequest, newText -> {
-            KrollDict kd = new KrollDict();
-            kd.put("text", newText);
-            fireEvent("streamResult", kd);
-        });
+            @Override
+            public void onDownloadProgress(long totalBytesDownloaded) {
+                Log.d(LCAT, operationType + " - Download progress: " + formatBytes(totalBytesDownloaded));
+                fireDownloadProgressEvent(operationType, totalBytesDownloaded, -1, "downloading");
+            }
+
+            @Override
+            public void onDownloadCompleted() {
+                Log.i(LCAT, operationType + " - Download completed successfully");
+                fireDownloadProgressEvent(operationType, -1, -1, "completed");
+                executeInference(client, text, streaming, operationType);
+            }
+
+            @Override
+            public void onDownloadFailed(GenAiException e) {
+                Log.e(LCAT, operationType + " - Download failed: " + e.getMessage(), e);
+                fireErrorEvent(operationType, "Download failed: " + e.getMessage());
+            }
+        };
+
+        if (client instanceof Proofreader) {
+            ((Proofreader) client).downloadFeature(callback);
+        } else if (client instanceof Rewriter) {
+            ((Rewriter) client).downloadFeature(callback);
+        } else if (client instanceof Summarizer) {
+            ((Summarizer) client).downloadFeature(callback);
+        }
     }
 
-    void startRewritingRequest(String text, Rewriter resultObj) {
-        RewritingRequest proofreadingRequest = RewritingRequest.builder(text).build();
+    private void downloadAndExecuteImage(ImageDescriber client, Bitmap bitmap, boolean streaming) {
+        client.downloadFeature(new DownloadCallback() {
+            @Override
+            public void onDownloadStarted(long bytesToDownload) {
+                Log.i(LCAT, "Image description - Download started. Size: " + formatBytes(bytesToDownload));
+                fireDownloadProgressEvent("imageDescription", 0, bytesToDownload, "started");
+            }
 
-        resultObj.runInference(proofreadingRequest, newText -> {
-            KrollDict kd = new KrollDict();
-            kd.put("text", newText);
-            fireEvent("streamResult", kd);
+            @Override
+            public void onDownloadProgress(long totalBytesDownloaded) {
+                Log.d(LCAT, "Image description - Download progress: " + formatBytes(totalBytesDownloaded));
+                fireDownloadProgressEvent("imageDescription", totalBytesDownloaded, -1, "downloading");
+            }
+
+            @Override
+            public void onDownloadCompleted() {
+                Log.i(LCAT, "Image description - Download completed successfully");
+                fireDownloadProgressEvent("imageDescription", -1, -1, "completed");
+                executeImageInference(client, bitmap, streaming);
+            }
+
+            @Override
+            public void onDownloadFailed(GenAiException e) {
+                Log.e(LCAT, "Image description - Download failed: " + e.getMessage(), e);
+                fireErrorEvent("imageDescription", "Download failed: " + e.getMessage());
+            }
         });
     }
 
     @SuppressLint("RestrictedApi")
-    void startSummarizationRequest(String text, Summarizer resultObj) {
-        SummarizationRequest proofreadingRequest = SummarizationRequest.builder(text).build();
-
-        resultObj.runInference(proofreadingRequest, newText -> {
-            KrollDict kd = new KrollDict();
-            kd.put("text", newText);
-            fireEvent("streamResult", kd);
-        });
+    private void executeInference(Object client, String text, boolean streaming, String operationType) {
+        try {
+            if (streaming) {
+                executeStreamingInference(client, text, operationType);
+            } else {
+                executeNonStreamingInference(client, text, operationType);
+            }
+        } catch (Exception e) {
+            Log.e(LCAT, operationType + " - Inference execution failed: " + e.getMessage(), e);
+            fireErrorEvent(operationType, "Inference failed: " + e.getMessage());
+        }
     }
 
+    private void executeStreamingInference(Object client, String text, String operationType) {
+        Log.d(LCAT, operationType + " - Starting streaming inference");
+
+        if (client instanceof Proofreader) {
+            ProofreadingRequest request = ProofreadingRequest.builder(text).build();
+            ((Proofreader) client).runInference(request, chunk -> {
+                Log.d(LCAT, operationType + " - Received stream chunk: " + chunk.length() + " chars");
+                fireStreamChunkEvent(operationType, chunk);
+            });
+        } else if (client instanceof Rewriter) {
+            RewritingRequest request = RewritingRequest.builder(text).build();
+            ((Rewriter) client).runInference(request, chunk -> {
+                Log.d(LCAT, operationType + " - Received stream chunk: " + chunk.length() + " chars");
+                fireStreamChunkEvent(operationType, chunk);
+            });
+        } else if (client instanceof Summarizer) {
+            SummarizationRequest request = SummarizationRequest.builder(text).build();
+            ((Summarizer) client).runInference(request, chunk -> {
+                Log.d(LCAT, operationType + " - Received stream chunk: " + chunk.length() + " chars");
+                fireStreamChunkEvent(operationType, chunk);
+            });
+        }
+    }
+
+    @SuppressLint("RestrictedApi")
+    private void executeNonStreamingInference(Object client, String text, String operationType) {
+        Log.d(LCAT, operationType + " - Starting non-streaming inference");
+
+        try {
+            String result = null;
+
+            if (client instanceof Proofreader) {
+                ProofreadingRequest request = ProofreadingRequest.builder(text).build();
+                List<com.google.mlkit.genai.proofreading.ProofreadingSuggestion> suggestions =
+                        ((Proofreader) client).runInference(request).get().getResults();
+
+                if (suggestions != null && !suggestions.isEmpty()) {
+                    // Pega a primeira sugestão (maior confiança)
+                    result = suggestions.get(0).getText();
+                    Log.d(LCAT, operationType + " - Received " + suggestions.size() + " suggestion(s)");
+                } else {
+                    Log.w(LCAT, operationType + " - No suggestions returned");
+                    fireErrorEvent(operationType, "No proofreading suggestions available");
+                    return;
+                }
+
+            } else if (client instanceof Rewriter) {
+                RewritingRequest request = RewritingRequest.builder(text).build();
+                List<com.google.mlkit.genai.rewriting.RewritingSuggestion> suggestions =
+                        ((Rewriter) client).runInference(request).get().getResults();
+
+                if (suggestions != null && !suggestions.isEmpty()) {
+                    // Pega a primeira sugestão (maior confiança)
+                    result = suggestions.get(0).getText();
+                    Log.d(LCAT, operationType + " - Received " + suggestions.size() + " suggestion(s)");
+                } else {
+                    Log.w(LCAT, operationType + " - No suggestions returned");
+                    fireErrorEvent(operationType, "No rewriting suggestions available");
+                    return;
+                }
+
+            } else if (client instanceof Summarizer) {
+                SummarizationRequest request = SummarizationRequest.builder(text).build();
+                result = ((Summarizer) client).runInference(request).get().getSummary();
+            }
+
+            if (result != null) {
+                Log.i(LCAT, operationType + " - Inference completed. Result length: " + result.length() + " chars");
+                fireSuccessEvent(operationType, result);
+            }
+        } catch (ExecutionException | InterruptedException e) {
+            Log.e(LCAT, operationType + " - Non-streaming inference failed: " + e.getMessage(), e);
+            fireErrorEvent(operationType, "Inference failed: " + e.getMessage());
+        }
+    }
+
+    @SuppressLint("RestrictedApi")
+    private void executeImageInference(ImageDescriber client, Bitmap bitmap, boolean streaming) {
+        try {
+            ImageDescriptionRequest request = ImageDescriptionRequest.builder(bitmap).build();
+
+            if (streaming) {
+                Log.d(LCAT, "Image description - Starting streaming inference");
+                client.runInference(request, chunk -> {
+                    Log.d(LCAT, "Image description - Received stream chunk: " + chunk.length() + " chars");
+                    fireStreamChunkEvent("imageDescription", chunk);
+                });
+            } else {
+                Log.d(LCAT, "Image description - Starting non-streaming inference");
+                String result = client.runInference(request).get().getDescription();
+                Log.i(LCAT, "Image description - Inference completed. Result length: " + result.length() + " chars");
+                fireSuccessEvent("imageDescription", result);
+            }
+        } catch (ExecutionException | InterruptedException e) {
+            Log.e(LCAT, "Image description - Inference failed: " + e.getMessage(), e);
+            fireErrorEvent("imageDescription", "Inference failed: " + e.getMessage());
+        }
+    }
+
+    // ==================== EVENT FIRING ====================
+
+    private void fireStatusChangeEvent(String operation, int status, String statusName) {
+        KrollDict event = new KrollDict();
+        event.put("operation", operation);
+        event.put("status", status);
+        event.put("statusName", statusName);
+        fireEvent(EVENT_STATUS_CHANGE, event);
+    }
+
+    private void fireDownloadProgressEvent(String operation, long downloaded, long total, String phase) {
+        KrollDict event = new KrollDict();
+        event.put("operation", operation);
+        event.put("phase", phase);
+        if (downloaded >= 0) event.put("downloaded", downloaded);
+        if (total >= 0) event.put("total", total);
+        if (downloaded > 0 && total > 0) {
+            event.put("progress", (double) downloaded / total);
+        }
+        fireEvent(EVENT_DOWNLOAD_PROGRESS, event);
+    }
+
+    private void fireStreamChunkEvent(String operation, String chunk) {
+        KrollDict event = new KrollDict();
+        event.put("operation", operation);
+        event.put("text", chunk);
+        fireEvent(EVENT_STREAM_CHUNK, event);
+    }
+
+    private void fireSuccessEvent(String operation, String result) {
+        KrollDict event = new KrollDict();
+        event.put("operation", operation);
+        event.put("text", result);
+        event.put("success", true);
+        fireEvent(EVENT_SUCCESS, event);
+    }
+
+    private void fireErrorEvent(String operation, String message) {
+        KrollDict event = new KrollDict();
+        event.put("operation", operation);
+        event.put("error", message);
+        event.put("success", false);
+        fireEvent(EVENT_ERROR, event);
+    }
+
+    // ==================== LANGUAGE MAPPING ====================
+
+    private int mapLanguageToProofreader(int lang) {
+        int result;
+        switch (lang) {
+            case LANG_ENGLISH: result = ProofreaderOptions.Language.ENGLISH;
+                break;
+            case LANG_JAPANESE: result = ProofreaderOptions.Language.JAPANESE;
+                break;
+            case LANG_KOREAN: result = ProofreaderOptions.Language.KOREAN;
+                break;
+            case LANG_GERMAN: result = ProofreaderOptions.Language.GERMAN;
+                break;
+            case LANG_FRENCH: result = ProofreaderOptions.Language.FRENCH;
+                break;
+            case LANG_ITALIAN: result = ProofreaderOptions.Language.ITALIAN;
+                break;
+            case LANG_SPANISH: result = ProofreaderOptions.Language.SPANISH;
+                break;
+            case LANG_PORTUGUESE:
+            case LANG_CHINESE:
+            default:
+                Log.w(LCAT, "Proofreading - Language '" + getLanguageName(lang) + "' not supported. Falling back to English. Supported: English, Japanese, Korean, German, French, Italian, Spanish");
+                result = ProofreaderOptions.Language.ENGLISH;
+                break;
+        }
+        return result;
+    }
+
+    private int mapLanguageToRewriter(int lang) {
+        int result;
+        switch (lang) {
+            case LANG_ENGLISH: result = RewriterOptions.Language.ENGLISH;
+                break;
+            case LANG_JAPANESE: result = RewriterOptions.Language.JAPANESE;
+                break;
+            case LANG_KOREAN: result = RewriterOptions.Language.KOREAN;
+                break;
+            case LANG_GERMAN: result = RewriterOptions.Language.GERMAN;
+                break;
+            case LANG_FRENCH: result = RewriterOptions.Language.FRENCH;
+                break;
+            case LANG_ITALIAN: result = RewriterOptions.Language.ITALIAN;
+                break;
+            case LANG_SPANISH: result = RewriterOptions.Language.SPANISH;
+                break;
+            case LANG_PORTUGUESE:
+            case LANG_CHINESE:
+            default:
+                Log.w(LCAT, "Rewriting - Language '" + getLanguageName(lang) + "' not supported. Falling back to English. Supported: English, Japanese, Korean, German, French, Italian, Spanish");
+                result = RewriterOptions.Language.ENGLISH;
+                break;
+        }
+        return result;
+    }
+
+    private int mapLanguageToSummarizer(int lang) {
+        int result;
+        switch (lang) {
+            case LANG_ENGLISH: result = SummarizerOptions.Language.ENGLISH;
+                break;
+            case LANG_JAPANESE: result = SummarizerOptions.Language.JAPANESE;
+                break;
+            case LANG_KOREAN: result = SummarizerOptions.Language.KOREAN;
+                break;
+            case LANG_GERMAN:
+            case LANG_FRENCH:
+            case LANG_ITALIAN:
+            case LANG_SPANISH:
+            case LANG_PORTUGUESE:
+            case LANG_CHINESE:
+            default:
+                Log.w(LCAT, "Summarization - Language '" + getLanguageName(lang) + "' not supported. Falling back to English. Supported: English, Japanese, Korean");
+                result = SummarizerOptions.Language.ENGLISH;
+                break;
+        }
+        return result;
+    }
+
+    // ==================== UTILITY METHODS ====================
+
+    private String getLanguageName(int lang) {
+        switch (lang) {
+            case LANG_ENGLISH: return "English";
+            case LANG_PORTUGUESE: return "Portuguese";
+            case LANG_SPANISH: return "Spanish";
+            case LANG_FRENCH: return "French";
+            case LANG_GERMAN: return "German";
+            case LANG_ITALIAN: return "Italian";
+            case LANG_JAPANESE: return "Japanese";
+            case LANG_KOREAN: return "Korean";
+            case LANG_CHINESE: return "Chinese";
+            default: return "Unknown";
+        }
+    }
+
+    private String getRewriteTypeName(int type) {
+        switch (type) {
+            case ELABORATE: return "Elaborate";
+            case PROFESSIONAL: return "Professional";
+            case SHORTEN: return "Shorten";
+            case FRIENDLY: return "Friendly";
+            case EMOJIFY: return "Emojify";
+            case REPHRASE: return "Rephrase";
+            default: return "Unknown";
+        }
+    }
+
+    private String getSummarizeTypeName(int type) {
+        switch (type) {
+            case ONE_BULLET: return "1 Bullet";
+            case TWO_BULLETS: return "2 Bullets";
+            case THREE_BULLETS: return "3 Bullets";
+            default: return "Unknown";
+        }
+    }
+
+    private String getFeatureStatusName(int status) {
+        switch (status) {
+            case FeatureStatus.UNAVAILABLE: return "Unavailable";
+            case FeatureStatus.DOWNLOADABLE: return "Downloadable";
+            case FeatureStatus.DOWNLOADING: return "Downloading";
+            case FeatureStatus.AVAILABLE: return "Available";
+            default: return "Unknown";
+        }
+    }
+
+    private String formatBytes(long bytes) {
+        if (bytes < 1024) return bytes + " B";
+        int exp = (int) (Math.log(bytes) / Math.log(1024));
+        String pre = "KMGTPE".charAt(exp - 1) + "";
+        return String.format("%.1f %sB", bytes / Math.pow(1024, exp), pre);
+    }
 }
-
