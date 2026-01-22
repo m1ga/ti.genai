@@ -10,10 +10,12 @@ package ti.genai;
 import android.annotation.SuppressLint;
 import android.graphics.Bitmap;
 import android.os.Build;
+
 import androidx.annotation.NonNull;
 import androidx.annotation.RequiresApi;
 import androidx.camera.core.impl.utils.futures.FutureCallback;
 import androidx.camera.core.impl.utils.futures.Futures;
+
 import com.google.common.util.concurrent.ListenableFuture;
 import com.google.mlkit.genai.common.DownloadCallback;
 import com.google.mlkit.genai.common.FeatureStatus;
@@ -34,57 +36,84 @@ import com.google.mlkit.genai.summarization.Summarization;
 import com.google.mlkit.genai.summarization.SummarizationRequest;
 import com.google.mlkit.genai.summarization.Summarizer;
 import com.google.mlkit.genai.summarization.SummarizerOptions;
+
 import org.appcelerator.kroll.KrollDict;
 import org.appcelerator.kroll.KrollModule;
 import org.appcelerator.kroll.annotations.Kroll;
 import org.appcelerator.kroll.common.Log;
 import org.appcelerator.titanium.TiApplication;
 import org.appcelerator.titanium.TiBlob;
-import java.util.concurrent.ExecutionException;
+
 import java.util.List;
+import java.util.concurrent.ExecutionException;
 
 @Kroll.module(name = "TiGenai", id = "ti.genai")
 public class TiGenaiModule extends KrollModule {
 
-    private static final String LCAT = "TiGenaiModule";
-
     // Rewriter Output Types
-    @Kroll.constant public static final int ELABORATE = RewriterOptions.OutputType.ELABORATE;
-    @Kroll.constant public static final int PROFESSIONAL = RewriterOptions.OutputType.PROFESSIONAL;
-    @Kroll.constant public static final int SHORTEN = RewriterOptions.OutputType.SHORTEN;
-    @Kroll.constant public static final int FRIENDLY = RewriterOptions.OutputType.FRIENDLY;
-    @Kroll.constant public static final int EMOJIFY = RewriterOptions.OutputType.EMOJIFY;
-    @Kroll.constant public static final int REPHRASE = RewriterOptions.OutputType.REPHRASE;
+    @Kroll.constant
+    public static final int ELABORATE = RewriterOptions.OutputType.ELABORATE;
+    @Kroll.constant
+    public static final int PROFESSIONAL = RewriterOptions.OutputType.PROFESSIONAL;
+    @Kroll.constant
+    public static final int SHORTEN = RewriterOptions.OutputType.SHORTEN;
+    @Kroll.constant
+    public static final int FRIENDLY = RewriterOptions.OutputType.FRIENDLY;
+    @Kroll.constant
+    public static final int EMOJIFY = RewriterOptions.OutputType.EMOJIFY;
+    @Kroll.constant
+    public static final int REPHRASE = RewriterOptions.OutputType.REPHRASE;
 
     // Summarizer Output Types
-    @Kroll.constant public static final int ONE_BULLET = SummarizerOptions.OutputType.ONE_BULLET;
-    @Kroll.constant public static final int TWO_BULLETS = SummarizerOptions.OutputType.TWO_BULLETS;
-    @Kroll.constant public static final int THREE_BULLETS = SummarizerOptions.OutputType.THREE_BULLETS;
+    @Kroll.constant
+    public static final int ONE_BULLET = SummarizerOptions.OutputType.ONE_BULLET;
+    @Kroll.constant
+    public static final int TWO_BULLETS = SummarizerOptions.OutputType.TWO_BULLETS;
+    @Kroll.constant
+    public static final int THREE_BULLETS = SummarizerOptions.OutputType.THREE_BULLETS;
 
     // Summarizer Input Types
-    @Kroll.constant public static final int ARTICLE = SummarizerOptions.InputType.ARTICLE;
-    @Kroll.constant public static final int CONVERSATION = SummarizerOptions.InputType.CONVERSATION;
+    @Kroll.constant
+    public static final int ARTICLE = SummarizerOptions.InputType.ARTICLE;
+    @Kroll.constant
+    public static final int CONVERSATION = SummarizerOptions.InputType.CONVERSATION;
 
     // Proofreader Input Types
-    @Kroll.constant public static final int KEYBOARD = ProofreaderOptions.InputType.KEYBOARD;
-    @Kroll.constant public static final int VOICE = ProofreaderOptions.InputType.VOICE;
+    @Kroll.constant
+    public static final int KEYBOARD = ProofreaderOptions.InputType.KEYBOARD;
+    @Kroll.constant
+    public static final int VOICE = ProofreaderOptions.InputType.VOICE;
 
     // Feature Status
-    @Kroll.constant public static final int STATUS_UNAVAILABLE = FeatureStatus.UNAVAILABLE;
-    @Kroll.constant public static final int STATUS_DOWNLOADABLE = FeatureStatus.DOWNLOADABLE;
-    @Kroll.constant public static final int STATUS_DOWNLOADING = FeatureStatus.DOWNLOADING;
-    @Kroll.constant public static final int STATUS_AVAILABLE = FeatureStatus.AVAILABLE;
+    @Kroll.constant
+    public static final int STATUS_UNAVAILABLE = FeatureStatus.UNAVAILABLE;
+    @Kroll.constant
+    public static final int STATUS_DOWNLOADABLE = FeatureStatus.DOWNLOADABLE;
+    @Kroll.constant
+    public static final int STATUS_DOWNLOADING = FeatureStatus.DOWNLOADING;
+    @Kroll.constant
+    public static final int STATUS_AVAILABLE = FeatureStatus.AVAILABLE;
 
     // Language Constants
-    @Kroll.constant public static final int LANG_ENGLISH = 0;
-    @Kroll.constant public static final int LANG_PORTUGUESE = 1;
-    @Kroll.constant public static final int LANG_SPANISH = 2;
-    @Kroll.constant public static final int LANG_FRENCH = 3;
-    @Kroll.constant public static final int LANG_GERMAN = 4;
-    @Kroll.constant public static final int LANG_ITALIAN = 5;
-    @Kroll.constant public static final int LANG_JAPANESE = 6;
-    @Kroll.constant public static final int LANG_KOREAN = 7;
-    @Kroll.constant public static final int LANG_CHINESE = 8;
+    @Kroll.constant
+    public static final int LANG_ENGLISH = 0;
+    @Kroll.constant
+    public static final int LANG_PORTUGUESE = 1;
+    @Kroll.constant
+    public static final int LANG_SPANISH = 2;
+    @Kroll.constant
+    public static final int LANG_FRENCH = 3;
+    @Kroll.constant
+    public static final int LANG_GERMAN = 4;
+    @Kroll.constant
+    public static final int LANG_ITALIAN = 5;
+    @Kroll.constant
+    public static final int LANG_JAPANESE = 6;
+    @Kroll.constant
+    public static final int LANG_KOREAN = 7;
+    @Kroll.constant
+    public static final int LANG_CHINESE = 8;
+    private static final String LCAT = "TiGenaiModule";
 
     // Event Names
     private static final String EVENT_STATUS_CHANGE = "statusChange";
@@ -104,7 +133,6 @@ public class TiGenaiModule extends KrollModule {
 
     @Kroll.onAppCreate
     public static void onAppCreate(TiApplication app) {
-        Log.d(LCAT, "TiGenai module initialized");
     }
 
     // ==================== PROOFREADING ====================
@@ -124,15 +152,9 @@ public class TiGenaiModule extends KrollModule {
         int language = options.optInt("language", LANG_ENGLISH);
         boolean streaming = options.optBoolean("streaming", true);
 
-        Log.d(LCAT, "Proofread config - Text length: " + text.length() +
-                ", InputType: " + inputType +
-                ", Language: " + getLanguageName(language) +
-                ", Streaming: " + streaming);
+        Log.d(LCAT, "Proofread config - Text length: " + text.length() + ", InputType: " + inputType + ", Language: " + getLanguageName(language) + ", Streaming: " + streaming);
 
-        ProofreaderOptions proofreaderOptions = ProofreaderOptions.builder(TiApplication.getAppRootOrCurrentActivity())
-                .setInputType(inputType)
-                .setLanguage(mapLanguageToProofreader(language))
-                .build();
+        ProofreaderOptions proofreaderOptions = ProofreaderOptions.builder(TiApplication.getAppRootOrCurrentActivity()).setInputType(inputType).setLanguage(mapLanguageToProofreader(language)).build();
 
         proofreader = Proofreading.getClient(proofreaderOptions);
         prepareAndExecute(proofreader, text, streaming, "proofreading");
@@ -155,15 +177,9 @@ public class TiGenaiModule extends KrollModule {
         int language = options.optInt("language", LANG_ENGLISH);
         boolean streaming = options.optBoolean("streaming", true);
 
-        Log.d(LCAT, "Rewrite config - Text length: " + text.length() +
-                ", OutputType: " + getRewriteTypeName(outputType) +
-                ", Language: " + getLanguageName(language) +
-                ", Streaming: " + streaming);
+        Log.d(LCAT, "Rewrite config - Text length: " + text.length() + ", OutputType: " + getRewriteTypeName(outputType) + ", Language: " + getLanguageName(language) + ", Streaming: " + streaming);
 
-        RewriterOptions rewriterOptions = RewriterOptions.builder(TiApplication.getAppRootOrCurrentActivity())
-                .setOutputType(outputType)
-                .setLanguage(mapLanguageToRewriter(language))
-                .build();
+        RewriterOptions rewriterOptions = RewriterOptions.builder(TiApplication.getAppRootOrCurrentActivity()).setOutputType(outputType).setLanguage(mapLanguageToRewriter(language)).build();
 
         rewriter = Rewriting.getClient(rewriterOptions);
         prepareAndExecute(rewriter, text, streaming, "rewriting");
@@ -187,17 +203,9 @@ public class TiGenaiModule extends KrollModule {
         int language = options.optInt("language", LANG_ENGLISH);
         boolean streaming = options.optBoolean("streaming", true);
 
-        Log.d(LCAT, "Summarize config - Text length: " + text.length() +
-                ", OutputType: " + getSummarizeTypeName(outputType) +
-                ", InputType: " + (inputType == ARTICLE ? "ARTICLE" : "CONVERSATION") +
-                ", Language: " + getLanguageName(language) +
-                ", Streaming: " + streaming);
+        Log.d(LCAT, "Summarize config - Text length: " + text.length() + ", OutputType: " + getSummarizeTypeName(outputType) + ", InputType: " + (inputType == ARTICLE ? "ARTICLE" : "CONVERSATION") + ", Language: " + getLanguageName(language) + ", Streaming: " + streaming);
 
-        SummarizerOptions summarizerOptions = SummarizerOptions.builder(TiApplication.getAppRootOrCurrentActivity())
-                .setOutputType(outputType)
-                .setInputType(inputType)
-                .setLanguage(mapLanguageToSummarizer(language))
-                .build();
+        SummarizerOptions summarizerOptions = SummarizerOptions.builder(TiApplication.getAppRootOrCurrentActivity()).setOutputType(outputType).setInputType(inputType).setLanguage(mapLanguageToSummarizer(language)).build();
 
         summarizer = Summarization.getClient(summarizerOptions);
         prepareAndExecute(summarizer, text, streaming, "summarization");
@@ -218,8 +226,7 @@ public class TiGenaiModule extends KrollModule {
         Object imageObj = options.get("image");
         Bitmap bitmap = null;
 
-        if (imageObj instanceof TiBlob) {
-            TiBlob blob = (TiBlob) imageObj;
+        if (imageObj instanceof TiBlob blob) {
             bitmap = blob.getImage();
             Log.d(LCAT, "Image description - Bitmap size: " + bitmap.getWidth() + "x" + bitmap.getHeight());
         } else {
@@ -230,9 +237,7 @@ public class TiGenaiModule extends KrollModule {
         boolean streaming = options.optBoolean("streaming", true);
         Log.d(LCAT, "Image description config - Streaming: " + streaming);
 
-        ImageDescriberOptions imageDescriberOptions = ImageDescriberOptions
-                .builder(TiApplication.getAppRootOrCurrentActivity())
-                .build();
+        ImageDescriberOptions imageDescriberOptions = ImageDescriberOptions.builder(TiApplication.getAppRootOrCurrentActivity()).build();
 
         imageDescriber = ImageDescription.getClient(imageDescriberOptions);
         prepareAndExecuteImage(imageDescriber, bitmap, streaming);
@@ -418,7 +423,7 @@ public class TiGenaiModule extends KrollModule {
 
             @Override
             public void onDownloadFailed(GenAiException e) {
-                Log.e(LCAT, operationType + " - Download failed: " + e.getMessage(), e);
+                Log.e(LCAT, operationType + " - Download failed: " + e.getMessage());
                 fireErrorEvent(operationType, "Download failed: " + e.getMessage());
             }
         };
@@ -455,7 +460,7 @@ public class TiGenaiModule extends KrollModule {
 
             @Override
             public void onDownloadFailed(GenAiException e) {
-                Log.e(LCAT, "Image description - Download failed: " + e.getMessage(), e);
+                Log.e(LCAT, "Image description - Download failed: " + e.getMessage());
                 fireErrorEvent("imageDescription", "Download failed: " + e.getMessage());
             }
         });
@@ -470,7 +475,7 @@ public class TiGenaiModule extends KrollModule {
                 executeNonStreamingInference(client, text, operationType);
             }
         } catch (Exception e) {
-            Log.e(LCAT, operationType + " - Inference execution failed: " + e.getMessage(), e);
+            Log.e(LCAT, operationType + " - Inference execution failed: " + e.getMessage());
             fireErrorEvent(operationType, "Inference failed: " + e.getMessage());
         }
     }
@@ -508,11 +513,9 @@ public class TiGenaiModule extends KrollModule {
 
             if (client instanceof Proofreader) {
                 ProofreadingRequest request = ProofreadingRequest.builder(text).build();
-                List<com.google.mlkit.genai.proofreading.ProofreadingSuggestion> suggestions =
-                        ((Proofreader) client).runInference(request).get().getResults();
+                List<com.google.mlkit.genai.proofreading.ProofreadingSuggestion> suggestions = ((Proofreader) client).runInference(request).get().getResults();
 
                 if (suggestions != null && !suggestions.isEmpty()) {
-                    // Pega a primeira sugestão (maior confiança)
                     result = suggestions.get(0).getText();
                     Log.d(LCAT, operationType + " - Received " + suggestions.size() + " suggestion(s)");
                 } else {
@@ -523,11 +526,9 @@ public class TiGenaiModule extends KrollModule {
 
             } else if (client instanceof Rewriter) {
                 RewritingRequest request = RewritingRequest.builder(text).build();
-                List<com.google.mlkit.genai.rewriting.RewritingSuggestion> suggestions =
-                        ((Rewriter) client).runInference(request).get().getResults();
+                List<com.google.mlkit.genai.rewriting.RewritingSuggestion> suggestions = ((Rewriter) client).runInference(request).get().getResults();
 
                 if (suggestions != null && !suggestions.isEmpty()) {
-                    // Pega a primeira sugestão (maior confiança)
                     result = suggestions.get(0).getText();
                     Log.d(LCAT, operationType + " - Received " + suggestions.size() + " suggestion(s)");
                 } else {
@@ -622,128 +623,95 @@ public class TiGenaiModule extends KrollModule {
     // ==================== LANGUAGE MAPPING ====================
 
     private int mapLanguageToProofreader(int lang) {
-        int result;
-        switch (lang) {
-            case LANG_ENGLISH: result = ProofreaderOptions.Language.ENGLISH;
-                break;
-            case LANG_JAPANESE: result = ProofreaderOptions.Language.JAPANESE;
-                break;
-            case LANG_KOREAN: result = ProofreaderOptions.Language.KOREAN;
-                break;
-            case LANG_GERMAN: result = ProofreaderOptions.Language.GERMAN;
-                break;
-            case LANG_FRENCH: result = ProofreaderOptions.Language.FRENCH;
-                break;
-            case LANG_ITALIAN: result = ProofreaderOptions.Language.ITALIAN;
-                break;
-            case LANG_SPANISH: result = ProofreaderOptions.Language.SPANISH;
-                break;
-            case LANG_PORTUGUESE:
-            case LANG_CHINESE:
-            default:
+        return switch (lang) {
+            case LANG_ENGLISH -> ProofreaderOptions.Language.ENGLISH;
+            case LANG_JAPANESE -> ProofreaderOptions.Language.JAPANESE;
+            case LANG_KOREAN -> ProofreaderOptions.Language.KOREAN;
+            case LANG_GERMAN -> ProofreaderOptions.Language.GERMAN;
+            case LANG_FRENCH -> ProofreaderOptions.Language.FRENCH;
+            case LANG_ITALIAN -> ProofreaderOptions.Language.ITALIAN;
+            case LANG_SPANISH -> ProofreaderOptions.Language.SPANISH;
+            default -> {
                 Log.w(LCAT, "Proofreading - Language '" + getLanguageName(lang) + "' not supported. Falling back to English. Supported: English, Japanese, Korean, German, French, Italian, Spanish");
-                result = ProofreaderOptions.Language.ENGLISH;
-                break;
-        }
-        return result;
+                yield ProofreaderOptions.Language.ENGLISH;
+            }
+        };
     }
 
     private int mapLanguageToRewriter(int lang) {
-        int result;
-        switch (lang) {
-            case LANG_ENGLISH: result = RewriterOptions.Language.ENGLISH;
-                break;
-            case LANG_JAPANESE: result = RewriterOptions.Language.JAPANESE;
-                break;
-            case LANG_KOREAN: result = RewriterOptions.Language.KOREAN;
-                break;
-            case LANG_GERMAN: result = RewriterOptions.Language.GERMAN;
-                break;
-            case LANG_FRENCH: result = RewriterOptions.Language.FRENCH;
-                break;
-            case LANG_ITALIAN: result = RewriterOptions.Language.ITALIAN;
-                break;
-            case LANG_SPANISH: result = RewriterOptions.Language.SPANISH;
-                break;
-            case LANG_PORTUGUESE:
-            case LANG_CHINESE:
-            default:
+        return switch (lang) {
+            case LANG_ENGLISH -> RewriterOptions.Language.ENGLISH;
+            case LANG_JAPANESE -> RewriterOptions.Language.JAPANESE;
+            case LANG_KOREAN -> RewriterOptions.Language.KOREAN;
+            case LANG_GERMAN -> RewriterOptions.Language.GERMAN;
+            case LANG_FRENCH -> RewriterOptions.Language.FRENCH;
+            case LANG_ITALIAN -> RewriterOptions.Language.ITALIAN;
+            case LANG_SPANISH -> RewriterOptions.Language.SPANISH;
+            default -> {
                 Log.w(LCAT, "Rewriting - Language '" + getLanguageName(lang) + "' not supported. Falling back to English. Supported: English, Japanese, Korean, German, French, Italian, Spanish");
-                result = RewriterOptions.Language.ENGLISH;
-                break;
-        }
-        return result;
+                yield RewriterOptions.Language.ENGLISH;
+            }
+        };
     }
 
     private int mapLanguageToSummarizer(int lang) {
-        int result;
-        switch (lang) {
-            case LANG_ENGLISH: result = SummarizerOptions.Language.ENGLISH;
-                break;
-            case LANG_JAPANESE: result = SummarizerOptions.Language.JAPANESE;
-                break;
-            case LANG_KOREAN: result = SummarizerOptions.Language.KOREAN;
-                break;
-            case LANG_GERMAN:
-            case LANG_FRENCH:
-            case LANG_ITALIAN:
-            case LANG_SPANISH:
-            case LANG_PORTUGUESE:
-            case LANG_CHINESE:
-            default:
+        return switch (lang) {
+            case LANG_ENGLISH -> SummarizerOptions.Language.ENGLISH;
+            case LANG_JAPANESE -> SummarizerOptions.Language.JAPANESE;
+            case LANG_KOREAN -> SummarizerOptions.Language.KOREAN;
+            default -> {
                 Log.w(LCAT, "Summarization - Language '" + getLanguageName(lang) + "' not supported. Falling back to English. Supported: English, Japanese, Korean");
-                result = SummarizerOptions.Language.ENGLISH;
-                break;
-        }
-        return result;
+                yield SummarizerOptions.Language.ENGLISH;
+            }
+        };
     }
 
     // ==================== UTILITY METHODS ====================
 
     private String getLanguageName(int lang) {
-        switch (lang) {
-            case LANG_ENGLISH: return "English";
-            case LANG_PORTUGUESE: return "Portuguese";
-            case LANG_SPANISH: return "Spanish";
-            case LANG_FRENCH: return "French";
-            case LANG_GERMAN: return "German";
-            case LANG_ITALIAN: return "Italian";
-            case LANG_JAPANESE: return "Japanese";
-            case LANG_KOREAN: return "Korean";
-            case LANG_CHINESE: return "Chinese";
-            default: return "Unknown";
-        }
+        return switch (lang) {
+            case LANG_ENGLISH -> "English";
+            case LANG_PORTUGUESE -> "Portuguese";
+            case LANG_SPANISH -> "Spanish";
+            case LANG_FRENCH -> "French";
+            case LANG_GERMAN -> "German";
+            case LANG_ITALIAN -> "Italian";
+            case LANG_JAPANESE -> "Japanese";
+            case LANG_KOREAN -> "Korean";
+            case LANG_CHINESE -> "Chinese";
+            default -> "Unknown";
+        };
     }
 
     private String getRewriteTypeName(int type) {
-        switch (type) {
-            case ELABORATE: return "Elaborate";
-            case PROFESSIONAL: return "Professional";
-            case SHORTEN: return "Shorten";
-            case FRIENDLY: return "Friendly";
-            case EMOJIFY: return "Emojify";
-            case REPHRASE: return "Rephrase";
-            default: return "Unknown";
-        }
+        return switch (type) {
+            case ELABORATE -> "Elaborate";
+            case PROFESSIONAL -> "Professional";
+            case SHORTEN -> "Shorten";
+            case FRIENDLY -> "Friendly";
+            case EMOJIFY -> "Emojify";
+            case REPHRASE -> "Rephrase";
+            default -> "Unknown";
+        };
     }
 
     private String getSummarizeTypeName(int type) {
-        switch (type) {
-            case ONE_BULLET: return "1 Bullet";
-            case TWO_BULLETS: return "2 Bullets";
-            case THREE_BULLETS: return "3 Bullets";
-            default: return "Unknown";
-        }
+        return switch (type) {
+            case ONE_BULLET -> "1 Bullet";
+            case TWO_BULLETS -> "2 Bullets";
+            case THREE_BULLETS -> "3 Bullets";
+            default -> "Unknown";
+        };
     }
 
     private String getFeatureStatusName(int status) {
-        switch (status) {
-            case FeatureStatus.UNAVAILABLE: return "Unavailable";
-            case FeatureStatus.DOWNLOADABLE: return "Downloadable";
-            case FeatureStatus.DOWNLOADING: return "Downloading";
-            case FeatureStatus.AVAILABLE: return "Available";
-            default: return "Unknown";
-        }
+        return switch (status) {
+            case FeatureStatus.UNAVAILABLE -> "Unavailable";
+            case FeatureStatus.DOWNLOADABLE -> "Downloadable";
+            case FeatureStatus.DOWNLOADING -> "Downloading";
+            case FeatureStatus.AVAILABLE -> "Available";
+            default -> "Unknown";
+        };
     }
 
     private String formatBytes(long bytes) {
