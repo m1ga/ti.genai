@@ -12,7 +12,7 @@ For an iOS AI module have a look at https://github.com/deckameron/Ti.Apple.Intel
 
 Run Gemini Nano locally for proofreading, rewriting, summarization, and image descriptions - all offline, private, and fast.
 
-[Features](#-features) • [Installation](#-installation) • [Quick Start](#-quick-start) • [Documentation](#-documentation) • [Examples](#-examples)
+[Features](#features) • [Installation](#installation) • [Quick Start](#quick-start) • [Documentation](#documentation) • [Examples](#examples)
 
 ---
 
